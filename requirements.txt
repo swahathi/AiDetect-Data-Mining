@@ -1,0 +1,14 @@
+numpy
+pandas
+pillow
+opencv-python-headless
+scikit-image
+scikit-learn
+xgboost
+shap
+joblib
+matplotlib
+streamlit>=1.50
+tqdm
+torch
+open_clip_torch
