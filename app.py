@@ -143,7 +143,7 @@ def contribution_chart(r):
     st.image(buf) #direct display to screen 
 
 
-tab1, tab2 = st.tabs(["🖼️ Analyse images", "📊 Model performance"])
+tab1, tab2 = st.tabs(["🖼️ Analyse images", "📊 Model performance"]) #create two tabs
 
 with tab1:
     files = st.file_uploader("Drop one or more images here",
@@ -154,20 +154,20 @@ with tab1:
     summary_rows = []
     for f in files or []:
         try:
-            r = analyze(f.getvalue(), bundle)
+            r = analyze(f.getvalue(), bundle) #raw bytes passed to analyze funtion
         except Exception as e:
             st.warning(f"{f.name}: {e}")
             continue
         label = "AI-generated" if r["is_ai"] else "Real"
         summary_rows.append({"File": f.name, "Prediction": label, "P(AI)": r["p_ai"], "Confidence": r["confidence"]})
         with st.expander(f"{'🤖' if r['is_ai'] else '📷'}  {f.name}  —  {label} ({r['confidence']:.0%})",
-                         expanded=len(files) == 1):
+                         expanded=len(files) == 1): #uploaded only single image
             left, right = st.columns([1, 1.25], gap="large")
             with left:
-                st.image(r["rgb"], width="stretch")
+                st.image(r["rgb"], width="stretch") #original image
             with right:
-                verdict_card(r)
-                reasons_block(r)
+                verdict_card(r) #high level summary ui card
+                reasons_block(r) #explainability
             m_tab, c_tab = st.tabs(["Metadata found in the file", "Feature contributions"])
             with m_tab:
                 meta = pd.DataFrame({"Field": list(r["metadata"].keys()),
@@ -180,6 +180,11 @@ with tab1:
     if len(summary_rows) > 1:
         st.subheader("Batch summary")
         sm = pd.DataFrame(summary_rows)
+        """
+        [{File":"image1.jpg","Prediction":"AI","P(AI)":0.92,"Confidence":0.92}]
+
+        Display as table format when converted to pd
+        """
         a, b, c = st.columns(3)
         a.metric("Images", len(sm))
         b.metric("Flagged AI", int((sm["Prediction"] == "AI-generated").sum()))
@@ -187,26 +192,26 @@ with tab1:
         st.dataframe(
             sm, hide_index=True, width="stretch",
             column_config={
-                "P(AI)": st.column_config.ProgressColumn("P(AI)", min_value=0.0, max_value=1.0, format="%.2f"),
+                "P(AI)": st.column_config.ProgressColumn("P(AI)", min_value=0.0, max_value=1.0, format="%.2f"), #0.92 becomes 92%
                 "Confidence": st.column_config.NumberColumn("Confidence", format="percent"),
             },
         )
         st.download_button("Download results (CSV)", sm.to_csv(index=False), "results.csv", "text/csv")
 
-with tab2:
-    mp = os.path.join(MODEL_DIR, "metrics.json")
+with tab2: #model performance tab
+    mp = os.path.join(MODEL_DIR, "metrics.json") #stores evaluation results
     if not os.path.exists(mp):
         st.info("Train a model to see its performance here.")
     else:
-        m = json.load(open(mp))
-        h = m["holdout"]
+        m = json.load(open(mp)) #python dictionary
+        h = m["holdout"] #test set evaluation results from 20% test data 
         st.caption(f"Model: **{m['model']}**  ·  {m['n_images']} images  ·  hold-out test set the model never trained on")
         a, b, c, d, e = st.columns(5)
         a.metric("Accuracy", f"{h['accuracy']:.1%}")
         b.metric("Precision", f"{h['precision']:.1%}")
         c.metric("Recall", f"{h['recall']:.1%}")
         d.metric("F1", f"{h['f1']:.3f}")
-        e.metric("AUC", f"{h['auc']:.3f}")
+        e.metric("AUC", f"{h['auc']:.3f}") #moel capability
         st.caption("Precision: of images called AI, how many are. Recall: of all AI images, how many were caught. "
                    "AUC: 0.5 is guessing, 1.0 is perfect.")
         for fn, title in (("cv_results.csv", "Classifier comparison"), ("ablation.csv", "Ablation: metadata vs visual")):
