@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Data caches, raw datasets, and archives
+archive/
+data/
+*.zip
+*.tar.gz
+models/features*.csv
+
+# Model evaluation artifacts to keep in repository for deployment
+!models/*.joblib
+!models/*.json
+!models/*.png
+!models/*.md
+!models/cv_results.csv
+!models/ablation.csv
+!models/feature_importance.csv
+
+# Keep sample test images for web app testing
+!sample_images/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

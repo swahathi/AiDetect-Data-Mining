@@ -31,8 +31,10 @@ def discover(root: str | None = None, real_dir: str | None = None, ai_dir: str |
     items: list[tuple[str, int]] = []
     if real_dir or ai_dir:
         for d, lab in ((real_dir, 0), (ai_dir, 1)):
-            if d:
+            if d and os.path.exists(d):
                 items += [(str(p), lab) for p in Path(d).rglob("*") if p.suffix.lower() in IMG_EXT]
+        return items
+    if not root or not os.path.exists(root):
         return items
     root_p = Path(root)
     for p in root_p.rglob("*"):
@@ -56,12 +58,14 @@ def from_csv(csv_path: str, image_root: str, path_col: str, label_col: str) -> l
     return items
 
 
-def balance_sample(items, max_per_class: int | None, seed: int = 42):
+def balance_sample(items, max_per_class: int | None = None, seed: int = 42):
     rng = random.Random(seed)
     by = {0: [], 1: []}
     for it in items:
         by[it[1]].append(it)
     n = min(len(by[0]), len(by[1]))
+    if n == 0:
+        return []
     if max_per_class:
         n = min(n, max_per_class)
     out = []
@@ -73,10 +77,13 @@ def balance_sample(items, max_per_class: int | None, seed: int = 42):
 
 def build_table(items, cache: str | None = None, n_jobs: int = -1) -> pd.DataFrame:
     if cache and os.path.exists(cache):
-        cached = pd.read_csv(cache)
-        if set(cached["path"]) == {p for p, _ in items}:
-            print(f"[data] using cached features: {cache}")
-            return cached
+        try:
+            cached = pd.read_csv(cache)
+            if set(cached["path"]) == {p for p, _ in items}:
+                print(f"[data] using cached features: {cache}")
+                return cached
+        except Exception:
+            pass
     print(f"[data] extracting features from {len(items)} images ...")
     rows = Parallel(n_jobs=n_jobs, batch_size=8)(delayed(feature_row)(p) for p, _ in items)
     recs = []

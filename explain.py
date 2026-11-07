@@ -59,7 +59,7 @@ def contributions(bundle: dict, feats: dict) -> pd.Series:
     pre, clf = pipe[:-1], pipe[-1]
     Xt = pre.transform(x)
     sel = list(pre.get_feature_names_out(names))
-    model = bundle["model_name"]
+    model = bundle.get("model_name", "")
     vals = None
     try:
         if model in TREE_MODELS:
@@ -76,38 +76,54 @@ def contributions(bundle: dict, feats: dict) -> pd.Series:
     except Exception:
         vals = None
     if vals is None:  # model-agnostic fallback (SVM, or SHAP unavailable)
-        st = bundle["stats"]
+        st = bundle.get("stats", {})
         vals = []
         for n, xv in zip(sel, Xt[0]):
             raw = feats.get(n, np.nan)
-            s = st[n]
-            sd = s["std"] or 1.0
-            if raw is None or (isinstance(raw, float) and np.isnan(raw)):
+            s = st.get(n)
+            if s is None or raw is None or (isinstance(raw, float) and np.isnan(raw)):
                 vals.append(0.0)
                 continue
-            vals.append(abs(raw - s["real_median"]) / sd - abs(raw - s["ai_median"]) / sd)
+            sd = s.get("std", 1.0) or 1.0
+            if isinstance(sd, (int, float)) and (np.isnan(sd) or sd == 0):
+                sd = 1.0
+            real_med = s.get("real_median", 0.0)
+            ai_med = s.get("ai_median", 0.0)
+            vals.append(abs(raw - real_med) / sd - abs(raw - ai_med) / sd)
         vals = np.array(vals)
     return pd.Series(vals, index=sel).sort_values(key=np.abs, ascending=False)
 
 
 def reason_text(name: str, value, toward_ai: bool, stats: dict) -> str:
     if name in BINARY:
-        return BINARY[name][int(round(value))] if value == value else BINARY[name][0]
-    s = stats[name]
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return BINARY[name][0]
+        try:
+            idx = int(round(float(value)))
+            idx = max(0, min(1, idx))
+            return BINARY[name][idx]
+        except Exception:
+            return BINARY[name][0]
+    s = stats.get(name) if stats else None
     side = "AI-generated" if toward_ai else "real"
+    if s is None:
+        return f"{label_of(name)} pushed the prediction towards {side}."
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return f"{label_of(name)} is closer to typical {side} images."
     return (f"{label_of(name)} = {value:.3g} is closer to typical {side} images "
-            f"(real ~ {s['real_median']:.3g}, AI ~ {s['ai_median']:.3g})")
+            f"(real ~ {s.get('real_median', 0.0):.3g}, AI ~ {s.get('ai_median', 0.0):.3g})")
 
 
 def explain(bundle: dict, feats: dict, is_ai: bool, top_n: int = 5) -> tuple[list[dict], pd.Series]:
     contrib = contributions(bundle, feats)
     direction = contrib[contrib > 0] if is_ai else contrib[contrib < 0]
     reasons = []
+    stats = bundle.get("stats", {})
     for name, c in direction.head(top_n).items():
         reasons.append({
             "feature": name,
             "label": label_of(name),
             "contribution": float(c),
-            "text": reason_text(name, feats.get(name, np.nan), c > 0, bundle["stats"]),
+            "text": reason_text(name, feats.get(name, np.nan), c > 0, stats),
         })
     return reasons, contrib

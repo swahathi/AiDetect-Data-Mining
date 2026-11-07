@@ -14,7 +14,7 @@ from predict import analyze, load_bundle
 MODEL_DIR = "models"
 RED, GREEN, AMBER = "#d64545", "#2e9e6b", "#d9962b"
 
-st.set_page_config(page_title="AI Image Detector", page_icon="", layout="wide")
+st.set_page_config(page_title="AI Image Detector", page_icon="🔍", layout="wide")
 
 st.markdown(
     """
@@ -59,7 +59,8 @@ def get_bundle():
 
 bundle = get_bundle()
 if bundle is None:
-    st.error("No trained model found. Run `python train.py --data <dataset folder>` first.")
+    st.error("No trained model bundle found at `models/model.joblib`.")
+    st.info("Train a model first with: `python train.py --real data/real --ai data/ai`")
     st.stop()
 
 with st.sidebar:
@@ -114,7 +115,11 @@ def reasons_block(r):
 
 
 def contribution_chart(r):
-    top = r["contributions"].head(8)[::-1]
+    contrib = r.get("contributions")
+    if contrib is None or (hasattr(contrib, "empty") and contrib.empty):
+        st.caption("No feature contributions available.")
+        return
+    top = contrib.head(8)[::-1]
     fig, ax = plt.subplots(figsize=(5.2, 3.4))
     ax.barh([label_of(n) for n in top.index], top.values, color=[RED if v > 0 else GREEN for v in top.values])
     ax.axvline(0, color="gray", lw=.8)

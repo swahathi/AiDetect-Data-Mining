@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.idea
+.vscode
+archive/
+models/features*.csv
+*.zip
+*.tar.gz

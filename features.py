@@ -12,7 +12,7 @@ from typing import Union
 
 import cv2
 import numpy as np
-from PIL import ExifTags, Image
+from PIL import ExifTags, Image, ImageOps
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
 
 Source = Union[str, os.PathLike, bytes]
@@ -235,6 +235,7 @@ def extract_all(src: Source) -> tuple[dict, dict, np.ndarray] | None:
         data = _read_bytes(src)
         meta, summary = extract_metadata(data)
         with Image.open(io.BytesIO(data)) as img:
+            img = ImageOps.exif_transpose(img)
             rgb = np.asarray(img.convert("RGB"))
         if rgb.shape[0] < 16 or rgb.shape[1] < 16:
             return None

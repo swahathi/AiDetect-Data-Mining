@@ -1,0 +1,50 @@
+{
+  "model": "Random Forest",
+  "n_images": 174,
+  "n_features": 64,
+  "k_selected": 25,
+  "selected_features": [
+    "vis_brightness",
+    "vis_contrast",
+    "vis_entropy",
+    "vis_texture_uniformity",
+    "vis_saturation_mean",
+    "vis_saturation_std",
+    "vis_r_mean",
+    "vis_r_std",
+    "vis_hist_r1",
+    "vis_hist_r2",
+    "vis_hist_r3",
+    "vis_hist_r4",
+    "vis_hist_r5",
+    "vis_hist_r7",
+    "vis_g_mean",
+    "vis_hist_g1",
+    "vis_hist_g2",
+    "vis_hist_g3",
+    "vis_b_mean",
+    "vis_b_hist_entropy",
+    "vis_hist_b0",
+    "vis_hist_b1",
+    "vis_hist_b3",
+    "vis_hist_b7",
+    "vis_fft_mid_ratio"
+  ],
+  "holdout": {
+    "accuracy": 0.9714285714285714,
+    "precision": 1.0,
+    "recall": 0.9411764705882353,
+    "f1": 0.9696969696969697,
+    "auc": 1.0,
+    "confusion_matrix": [
+      [
+        18,
+        0
+      ],
+      [
+        1,
+        16
+      ]
+    ]
+  }
+}
