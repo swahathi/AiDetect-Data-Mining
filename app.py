@@ -1,17 +1,21 @@
 """Streamlit UI:  streamlit run app.py"""
-import html
-import io
-import json
-import os
+import html #display html content safely
+import io   #handle image/chart data in memory(temp buffer)
+import json #model performance metrics in json file so to read
+import os   #create and check file paths
 
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt #feature contribution bar chart
 import pandas as pd
 import streamlit as st
 
-from explain import label_of
-from predict import analyze, load_bundle
+from explain import label_of #feature names to readable labels
+from predict import analyze, load_bundle 
 
-MODEL_DIR = "models"
+"""
+Load trained model and prediction, metrics, results, metadata,
+contributions of the uploaded image to be returned.
+"""
+MODEL_DIR = "models" #contains trained models +evaluation files
 RED, GREEN, AMBER = "#d64545", "#2e9e6b", "#d9962b"
 
 st.set_page_config(page_title="AI Image Detector", page_icon="🔍", layout="wide")
@@ -48,12 +52,12 @@ st.markdown(
     '<div class="hero"><h1>AI-Generated Image Detector</h1>'
     "<p>Metadata mining + visual feature mining + an explainable classifier</p></div>",
     unsafe_allow_html=True,
-)
+) #display main heading
 
 
-@st.cache_resource
+@st.cache_resource #dont reload model
 def get_bundle():
-    p = os.path.join(MODEL_DIR, "model.joblib")
+    p = os.path.join(MODEL_DIR, "model.joblib") #create file path
     return load_bundle(p) if os.path.exists(p) else None
 
 
@@ -81,7 +85,8 @@ with st.sidebar:
 
 
 def verdict_card(r):
-    p = r["p_ai"]
+    p = r["p_ai"] #r is result dictionary, result from analyze(), p_ai means the
+    #probability that image is ai generated
     if 0.4 <= p <= 0.6:
         cls, title, color = "v-unsure", "Uncertain", AMBER
     elif r["is_ai"]:
@@ -108,8 +113,12 @@ def reasons_block(r):
     for x in items:
         cls = "ai" if r["is_ai"] else "real"      # reasons always support the verdict
         st.markdown(f'<div class="reason {cls}">{html.escape(str(x["text"]))}</div>', unsafe_allow_html=True)
-    if len(r.get("components", {})) > 1:
+    if len(r.get("components", {})) > 1: #the case of multiple sub components like XGBooost
         chips = "".join(f'<span class="chip">{html.escape(k)}: {v:.0%}</span>' for k, v in r["components"].items())
+        """
+        each sub models probabiltity score and name 
+        converted to % of small pills/chips HTML format
+        """
         st.markdown(f'<div class="small" style="margin-top:.6rem">Model votes (P(AI))</div>{chips}',
                     unsafe_allow_html=True)
 
@@ -119,7 +128,7 @@ def contribution_chart(r):
     if contrib is None or (hasattr(contrib, "empty") and contrib.empty):
         st.caption("No feature contributions available.")
         return
-    top = contrib.head(8)[::-1]
+    top = contrib.head(8)[::-1] #take first 8 features, order reverse from matplotlib chart
     fig, ax = plt.subplots(figsize=(5.2, 3.4))
     ax.barh([label_of(n) for n in top.index], top.values, color=[RED if v > 0 else GREEN for v in top.values])
     ax.axvline(0, color="gray", lw=.8)
@@ -128,10 +137,10 @@ def contribution_chart(r):
         ax.spines[s].set_visible(False)
     ax.tick_params(labelsize=8)
     fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", transparent=True, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-    st.image(buf)
+    buf = io.BytesIO() #RAM memory buffer created
+    fig.savefig(buf, format="png", transparent=True, dpi=200, bbox_inches="tight") #png saved
+    plt.close(fig) #avoid memory leak
+    st.image(buf) #direct display to screen 
 
 
 tab1, tab2 = st.tabs(["🖼️ Analyse images", "📊 Model performance"])
