@@ -21,12 +21,12 @@ def _embedder(name: str):
 def load_bundle(path: str = "models/model.joblib") -> dict:
     return joblib.load(path)
 
-
+#accepts input image, loaded trained model, number of important explanation reasons to return 
 def analyze(src, bundle: dict, top_n: int = 5) -> dict:
     out = extract_all(src)
     if out is None:
         raise ValueError("Could not read this file as an image.")
-    feats, meta_summary, rgb = out
+    feats, meta_summary, rgb = out #numerical feature values, readable metadata
     X = pd.DataFrame([feats]).reindex(columns=bundle["feature_names"])
     p_hand = float(bundle["pipeline"].predict_proba(X)[0, 1])
     components = {"Handcrafted + metadata model": p_hand}
@@ -43,11 +43,16 @@ def analyze(src, bundle: dict, top_n: int = 5) -> dict:
                                ("meta_has_ai_text_chunk", "Embedded prompt/generation parameters found in the file"),
                                ("meta_has_c2pa_or_iptc_ai", "Provenance tag (C2PA/IPTC) marks the image as AI-generated"))
                 if feats.get(k)]
+    #metadata forensics
     if declared:
-        is_ai, p_ai = True, max(p_ai, 0.99)
+        is_ai, p_ai = True, max(p_ai, 0.99) #probabiloty raised
     else:
         is_ai = p_ai >= 0.5
-
+    """
+    CLIP converts image into a deep visual embedding
+    higher level visual information learned by pretrained model
+    embedding pipeline predicts
+    """
     reasons, contrib = explain(bundle, feats, is_ai, top_n)
     if "Deep visual model (CLIP)" in components:
         reasons.insert(0, {"feature": "clip", "label": "CLIP", "contribution": 0.0,
@@ -66,7 +71,11 @@ def analyze(src, bundle: dict, top_n: int = 5) -> dict:
         "metadata": meta_summary,
         "rgb": rgb,
     }
-
+"""
+Both predicstioned passed to stacker, stacker combines
+and produces final probability p_ai
+Stacking ensemble learning
+"""
 
 if __name__ == "__main__":
     import sys
