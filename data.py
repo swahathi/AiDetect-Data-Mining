@@ -1,23 +1,26 @@
-"""Dataset discovery + parallel feature extraction (with on-disk cache)."""
+"""Dataset discovery + parallel feature extraction (with on-disk cache).
+Prepareed dataset for model training. 
+"""
+
 from __future__ import annotations
 
 import os
-import random
-from pathlib import Path
+import random #randomly selecting imges
+from pathlib import Path #helps search through different folderss
 
 import pandas as pd
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed #parallel feature extraction
 
-from features import feature_row
+from features import feature_row #extract numerical features from each image
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 AI_WORDS = ("ai", "fake", "synthetic", "generated", "diffusion", "gan", "midjourney", "dalle",
             "dall-e", "sdxl", "stable", "sd_", "gen_", "artificial", "deepfake")
 REAL_WORDS = ("real", "human", "authentic", "camera", "natural", "original", "genuine", "nature")
 
-
+#identify real image folders and ai image folders based on folder names 
 def _label_from_parts(parts: list[str]) -> int | None:
-    low = [p.lower() for p in parts]
+    low = [p.lower() for p in parts] #lowercase
     for p in reversed(low):  # nearest folder wins; AI keywords checked first
         tokens = p.replace("-", "_").replace(" ", "_").split("_")
         if p in AI_WORDS or any(t in AI_WORDS for t in tokens) or p.startswith(AI_WORDS):
@@ -26,7 +29,7 @@ def _label_from_parts(parts: list[str]) -> int | None:
             return 0
     return None
 
-
+#searches for image insid the folder
 def discover(root: str | None = None, real_dir: str | None = None, ai_dir: str | None = None) -> list[tuple[str, int]]:
     items: list[tuple[str, int]] = []
     if real_dir or ai_dir:
@@ -62,8 +65,8 @@ def balance_sample(items, max_per_class: int | None = None, seed: int = 42):
     rng = random.Random(seed)
     by = {0: [], 1: []}
     for it in items:
-        by[it[1]].append(it)
-    n = min(len(by[0]), len(by[1]))
+        by[it[1]].append(it) #seperates images into two groups based on their labels
+    n = min(len(by[0]), len(by[1])) #size of smaller class
     if n == 0:
         return []
     if max_per_class:
@@ -72,6 +75,10 @@ def balance_sample(items, max_per_class: int | None = None, seed: int = 42):
     for lab in (0, 1):
         rng.shuffle(by[lab])
         out += by[lab][:n]
+    """
+    Avoid bias by randomly shuffling both classses 
+    and selecting same number of images from each.
+    """
     return out
 
 
@@ -86,6 +93,9 @@ def build_table(items, cache: str | None = None, n_jobs: int = -1) -> pd.DataFra
             pass
     print(f"[data] extracting features from {len(items)} images ...")
     rows = Parallel(n_jobs=n_jobs, batch_size=8)(delayed(feature_row)(p) for p, _ in items)
+    """
+    calls feature_row-> calls extract_all(){features.py} -> extract metadata() and extract_visual()
+    """
     recs = []
     for (p, lab), r in zip(items, rows):
         if r is not None:
@@ -95,3 +105,10 @@ def build_table(items, cache: str | None = None, n_jobs: int = -1) -> pd.DataFra
     if cache:
         df.to_csv(cache, index=False)
     return df
+"""
+1. Folder names- assign labels
+2. Take images and their labels from each folder
+3. Labels converted to numerical values
+4. Selects equal number of real and ai images
+5. Extract features from all images , reuse cache, parallel processing and creates final Pandas Dtaframe
+"""
