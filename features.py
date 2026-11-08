@@ -6,20 +6,40 @@ Two feature families (prefixes keep them separable for ablation studies):
 """
 from __future__ import annotations
 
-import io
+import io #read image data directly from memory ising BytesIO
 import os
-from typing import Union
+from typing import Union #function can accept different data types
 
 import cv2
+"""
+Used for image processing operations such as 
+resizing, grayscale conversion, edge detection, noise analysis
+"""
 import numpy as np
 from PIL import ExifTags, Image, ImageOps
+"""
+Python Imaging Library- open imagess and extract metadata 
+such as EXIF
+
+EXIF tag numbers converted to meaningful names 
+such as camera make and model
+
+ImageOps for correcting image orientation
+
+"""
 from skimage.feature import graycomatrix, graycoprops, local_binary_pattern
+#calculate glcm texture features
+#local_binary_pattern for extracting lbp textual features
 
 Source = Union[str, os.PathLike, bytes]
-
+"""
+File path as a string
+File path using os.Pathlike
+Image directly as bytes -> given as input
+"""
 NORM = 1024  # every image is centre-squared and resized to this before visual features are measured
-CROP = 512  # centre crop (no resizing -> noise statistics stay untouched)
-BLOCK = 32
+CROP = 512  # centre crop (no resizing -> noise statistics stay untouched) -> for visual feature
+BLOCK = 32 # for noise and tecture uniformity detection
 
 AI_TOOL_KEYWORDS = (
     "stable diffusion", "stablediffusion", "midjourney", "dall-e", "dalle", "firefly",
@@ -28,67 +48,79 @@ AI_TOOL_KEYWORDS = (
     "openai", "gemini", "grok",
 )
 AI_TEXT_CHUNK_KEYS = ("parameters", "prompt", "workflow", "negative prompt", "sd-metadata", "dream")
+#metadata fields with possible embeddings
 COMMON_AI_SIZES = {256, 512, 640, 768, 832, 896, 1024, 1152, 1216, 1344, 1536, 2048}
-
+# image ddimensions commonly used by ai
 _TAGS = ExifTags.TAGS
 
-
+#reads image and converts it to bytes
 def _read_bytes(src: Source) -> bytes:
-    if isinstance(src, (bytes, bytearray)):
+    if isinstance(src, (bytes, bytearray)): #if already in bytes
         return bytes(src)
-    with open(src, "rb") as fh:
-        return fh.read()
+    with open(src, "rb") as fh: #rb read binary 
+        return fh.read() #read entire file
 
-
+#extract EXIF metadata
 def _exif_dict(img: Image.Image) -> dict:
     out: dict = {}
     try:
         exif = img.getexif()
     except Exception:
         return out
-    for k, v in exif.items():
-        out[_TAGS.get(k, k)] = v
-    for ifd_id in (0x8769,):  # Exif sub-IFD (lens, exposure, original datetime ...)
+    for k, v in exif.items(): #exif data stored using numerical tag IDs
+        out[_TAGS.get(k, k)] = v #converst to readable names called tags
+    for ifd_id in (0x8769,):  # Exif sub-IFD (lens, exposure, original datetime ...)- Image file directory
         try:
             for k, v in exif.get_ifd(ifd_id).items():
-                out[_TAGS.get(k, k)] = v
+                out[_TAGS.get(k, k)] = v #adds to dictionary
         except Exception:
             pass
     try:
         gps = exif.get_ifd(0x8825)
         if gps:
-            out["GPSInfo"] = dict(gps)
+            out["GPSInfo"] = dict(gps) #adds to dictionary as GPSInfo
     except Exception:
         pass
-    return out
+    return out #returns complete EXIF dictionary
 
-
+#cleaning metadata values
 def _clean(v, n=120) -> str:
     if isinstance(v, bytes):
-        v = v.decode("utf-8", "ignore")
+        v = v.decode("utf-8", "ignore")  #cinverts byte into readable text
     return str(v).strip().replace("\x00", "")[:n]
 
 
 # --------------------------------------------------------------------------- metadata
 def extract_metadata(data: bytes) -> tuple[dict, dict]:
     """Returns (numeric feature dict, human-readable summary dict)."""
-    with Image.open(io.BytesIO(data)) as img:
+    with Image.open(io.BytesIO(data)) as img: #open image 
         w, h = img.size
         fmt = (img.format or "").upper()
         exif = _exif_dict(img)
         info = {str(k): v for k, v in img.info.items()}
-        has_icc = int("icc_profile" in info)
+        has_icc = int("icc_profile" in info) #if icc colour profile
 
     make, model = _clean(exif.get("Make", "")), _clean(exif.get("Model", ""))
     lens = _clean(exif.get("LensModel", exif.get("LensMake", "")))
     dt = _clean(exif.get("DateTimeOriginal", exif.get("DateTime", "")))
     software = _clean(exif.get("Software", info.get("Software", "")))
     has_gps = int(bool(exif.get("GPSInfo")))
-
+    """
+    1- GPS INFO EXISTS
+    0 - GPS INFO DOESNT EXIST
+    """
     text_blob = " ".join(
         _clean(v, 2000) for k, v in info.items()
         if isinstance(v, (str, bytes)) and k not in ("icc_profile", "exif", "xmp")
     ).lower() + " " + software.lower()
+    """
+    Iterated through fields, 
+    Select values in string or bytes, 
+    Excludes icc, exif, xmp fields
+    Cleans
+    Joins them to one string- lower case
+    Adds software information  -> to search for ai generation keywords
+    """
     has_ai_text_chunk = int(any(k.lower() in AI_TEXT_CHUNK_KEYS for k in info))
     ai_keyword = int(any(kw in text_blob for kw in AI_TOOL_KEYWORDS))
 
@@ -96,18 +128,20 @@ def extract_metadata(data: bytes) -> tuple[dict, dict]:
     has_c2pa = int(b"c2pa" in head or b"trainedalgorithmicmedia" in head or b"compositewithtrainedalgorithmicmedia" in head)
     if not ai_keyword and b"trainedalgorithmicmedia" in head:
         ai_keyword = 1
-
+    """
+    Contains numerical values for the model
+    """
     feats = {
-        "meta_has_exif": int(len(exif) > 0),
-        "meta_exif_count": len(exif),
-        "meta_has_make": int(bool(make)),
-        "meta_has_model": int(bool(model)),
-        "meta_has_lens": int(bool(lens)),
-        "meta_has_datetime": int(bool(dt)),
-        "meta_has_gps": has_gps,
-        "meta_has_software": int(bool(software)),
+        "meta_has_exif": int(len(exif) > 0), #whether exif data is there
+        "meta_exif_count": len(exif), # number of fields
+        "meta_has_make": int(bool(make)), #camera manufacturer
+        "meta_has_model": int(bool(model)), #model
+        "meta_has_lens": int(bool(lens)), #lens information
+        "meta_has_datetime": int(bool(dt)), #date 
+        "meta_has_gps": has_gps, #gps
+        "meta_has_software": int(bool(software)), #software
         "meta_software_ai_keyword": ai_keyword,
-        "meta_has_ai_text_chunk": has_ai_text_chunk,
+        "meta_has_ai_text_chunk": has_ai_text_chunk, #prompt/parameter fields
         "meta_has_c2pa_or_iptc_ai": has_c2pa,
         "meta_has_icc": has_icc,
         "meta_is_jpeg": int(fmt in ("JPEG", "MPO")),
@@ -119,7 +153,10 @@ def extract_metadata(data: bytes) -> tuple[dict, dict]:
         "meta_dims_ai_typical": int(w in COMMON_AI_SIZES and h in COMMON_AI_SIZES),
         "meta_file_kb": len(data) / 1024,
         "meta_bytes_per_pixel": len(data) / max(w * h, 1),
-    }
+    } 
+    """
+    Human readable informations for user interface
+    """
     summary = {
         "Format": fmt, "Dimensions": f"{w} x {h}", "File size": f"{len(data)/1024:.0f} KB",
         "Camera make": make or "-", "Camera model": model or "-", "Lens": lens or "-",
