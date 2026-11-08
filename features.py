@@ -172,18 +172,24 @@ def extract_metadata(data: bytes) -> tuple[dict, dict]:
 
 # --------------------------------------------------------------------------- visual
 def _entropy(arr: np.ndarray, bins: int = 256, rng=(0, 256)) -> float:
-    hist, _ = np.histogram(arr, bins=bins, range=rng)
-    p = hist / max(hist.sum(), 1)
-    p = p[p > 0]
-    return float(-(p * np.log2(p)).sum())
+    hist, _ = np.histogram(arr, bins=bins, range=rng) #pixel internsity range into 256 bins
+    p = hist / max(hist.sum(), 1) #convert to probabilities
+    p = p[p > 0] #remove zero probabilties
+    return float(-(p * np.log2(p)).sum()) #calulcate entropy- numerical measure of pixel intensity variation 
 
-
+"""
+Divides image into 32x32 blocks
+each block is examines for noise and texture
+"""
 def _block_view(a: np.ndarray, b: int = BLOCK):
     bh, bw = (a.shape[0] // b) * b, (a.shape[1] // b) * b
     if bh == 0 or bw == 0:
         return None
     return a[:bh, :bw].reshape(bh // b, b, bw // b, b)
-
+"""
+All images consistent in size
+if 1920x1080 then take 1080x1080 square from centre
+"""
 
 def normalize_scale(rgb: np.ndarray) -> np.ndarray:
     """Centre-square then resize to NORM x NORM so noise/texture statistics are comparable across sources."""
@@ -194,7 +200,7 @@ def normalize_scale(rgb: np.ndarray) -> np.ndarray:
     if s == NORM:
         return sq
     return cv2.resize(sq, (NORM, NORM), interpolation=cv2.INTER_AREA if s > NORM else cv2.INTER_CUBIC)
-
+    #interpolation methods for resizing
 
 def extract_visual(rgb: np.ndarray) -> dict:
     rgb = normalize_scale(rgb)
@@ -203,8 +209,11 @@ def extract_visual(rgb: np.ndarray) -> dict:
     y0, x0 = (h - ch) // 2, (w - cw) // 2
     rgb = np.ascontiguousarray(rgb[y0:y0 + ch, x0:x0 + cw])
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    g = gray.astype(np.float32)
-    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    g = gray.astype(np.float32) #grayscale pixel values to floating point numbers
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV) #rgp -> hsv
+    """
+    HSV represents colour using hue, saturation, value for brightness
+    """
     f: dict = {}
 
     # global tone
@@ -213,7 +222,7 @@ def extract_visual(rgb: np.ndarray) -> dict:
     f["vis_entropy"] = _entropy(gray)
 
     # sharpness & edges
-    f["vis_sharpness"] = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    f["vis_sharpness"] = float(cv2.Laplacian(gray, cv2.CV_64F).var()) #laplacian filerr
     f["vis_edge_density"] = float(cv2.Canny(gray, 100, 200).mean() / 255.0)
 
     # sensor-noise proxy: residual after median denoise
@@ -286,3 +295,19 @@ def feature_row(src: Source) -> dict | None:
     """Light wrapper for batch extraction (no pixel array returned)."""
     out = extract_all(src)
     return None if out is None else out[0]
+
+"""
+
+Visual features include brightness, contrast, entropy, sharpness, noise statistics, glcm, lbp, colour histograms, fft based frequency featues.
+
+1. Brightness- Avg pixel intensity -> Numpy Mean
+2. Contrast - Pixel Intensity variation -> Standard Deviation
+3. Entropy - Pixel Intensity Distrubution -> Shannon Entropy, Histogram
+4. Sharpness -  Edge variance -> Laplacian Variance (openccv)
+5. Edge Density - detect edges -> Canny Edge Detection (opencv)
+6. Noise Detection - Original-Mean filtered -> Median Blur, Standard Deviation, MAD
+7. Noise Uniformity -> Block-wise Statistical Analysis
+8. GLCM Matrix - neighbouring pizel intensity relationship
+9. LBP - compare neighbours, get local texture patterns -> Local Binary Pattern
+10. Image Frequency Spectrum - 2D Fast Fourier Transform
+"""
