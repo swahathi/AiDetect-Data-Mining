@@ -7,7 +7,7 @@ Examples
 """
 from __future__ import annotations
 
-import argparse
+import argparse #accepts inputs asuch as dataset path, number of features as command line
 import json
 import os
 import time
@@ -16,7 +16,7 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 from functools import partial
 
-import joblib
+import joblib #saves training model
 import matplotlib
 
 matplotlib.use("Agg")
@@ -24,9 +24,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectKBest, mutual_info_classif
-from sklearn.impute import SimpleImputer
-from sklearn.inspection import permutation_importance
+from sklearn.feature_selection import SelectKBest, mutual_info_classif #select best features
+from sklearn.impute import SimpleImputer 
+from sklearn.inspection import permutation_importance #measure feature importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score, confusion_matrix, f1_score,
                              precision_score, recall_score, roc_auc_score, roc_curve)
@@ -37,8 +37,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 
-import data as D
-from embed import stack_features
+import data as D #data.py
+from embed import stack_features #fn from embed.py, optional clip based
 
 SEED = 42
 # File-format / size / dimension features describe how a dataset was saved, not what the image shows.
@@ -62,7 +62,7 @@ def make_models() -> dict:
         print("[warn] xgboost not installed - skipping")
     return models
 
-
+#creates complete pipeline
 def make_pipe(clf, k: int) -> Pipeline:
     return Pipeline([
         ("impute", SimpleImputer(strategy="median", keep_empty_features=True)),
@@ -71,7 +71,7 @@ def make_pipe(clf, k: int) -> Pipeline:
         ("clf", clf),
     ])
 
-
+#classifer for CLIP image embeddings
 def make_emb_models() -> dict:
     m = {
         "Logistic Regression": LogisticRegression(C=0.1, max_iter=3000),
@@ -89,14 +89,14 @@ def make_emb_models() -> dict:
 def make_emb_pipe(clf) -> Pipeline:
     return Pipeline([("scale", StandardScaler()), ("clf", clf)])
 
-
+#saves confusion matrix as an image 
 def save_cm(cm, title, path):
     fig, ax = plt.subplots(figsize=(4, 4))
     ConfusionMatrixDisplay(cm, display_labels=["Real", "AI"]).plot(ax=ax, colorbar=False)
     ax.set_title(title)
     fig.tight_layout(), fig.savefig(path, dpi=140), plt.close(fig)
 
-
+#Plots ROC curves for different classifiers
 def save_roc(rocs, path):
     fig, ax = plt.subplots(figsize=(5.5, 4.2))
     for n, (fpr, tpr, _) in rocs.items():
@@ -106,7 +106,7 @@ def save_roc(rocs, path):
     ax.set_title("ROC - hold-out set")
     fig.tight_layout(), fig.savefig(path, dpi=140), plt.close(fig)
 
-
+#Pandas dataframe -> Markdown Table
 def md_table(df: pd.DataFrame, floatfmt="{:.4f}") -> str:
     cols = list(df.columns)
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
@@ -371,3 +371,27 @@ Accuracy {h['accuracy']:.4f} | Precision {h['precision']:.4f} | Recall {h['recal
 
 if __name__ == "__main__":
     main()
+
+"""
+accepts dataset location and training configurations
+loads dataset calling discover(), from_csv() from data.py
+balanced using balance_sample()
+build_table () is called to extract all features 
+train_test_split - standardised like in a way data preprocessing
+Trains and compares 5 classification algorithms a)Logistic Regression
+b) Decision Tree 
+c) Random Forest
+d) SVM
+e) XGBoost
+
+Each model undergoes 5-fold Stratified Cross-Validation
+accuracy, precision, recall, f1 score and roc auc
+using f1 and roc auc choose best
+
+performs ablation study
+
+selected model is retrained using available training dataset, program generated model.joblib, metrics.json, comparison CSV files,
+evalaution charts and a markdown report
+
+saved model is then loaded by app.py
+"""
